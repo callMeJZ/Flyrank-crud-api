@@ -15,7 +15,7 @@ A RESTful Task Management API built with Python and FastAPI, implementing CRUD o
 
 ### 1. Clone the repository
 
-git clone [REPOSITORY_URL](https://github.com/callMeJZ/Flyrank-crud-api.git)
+git clone https://github.com/callMeJZ/Flyrank-crud-api.git
 
 ### 2. Enter the directory
 
