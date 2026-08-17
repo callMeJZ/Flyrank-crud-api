@@ -2,8 +2,7 @@
 
 ## Description
 
-A simple RESTful CRUD API for managing a to-do list,
-built using Python and FastAPI.
+A RESTful Task Management API built with Python and FastAPI, implementing CRUD operations, request validation, HTTP status codes, and Swagger UI documentation.
 
 ## Technologies
 
