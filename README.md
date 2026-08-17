@@ -2,8 +2,7 @@
 
 ## Description
 
-A simple RESTful CRUD API for managing a to-do list,
-built using Python and FastAPI.
+A RESTful Task Management API built with Python and FastAPI, implementing CRUD operations, request validation, HTTP status codes, and Swagger UI documentation.
 
 ## Technologies
 
@@ -16,7 +15,7 @@ built using Python and FastAPI.
 
 ### 1. Clone the repository
 
-git clone [REPOSITORY_URL](https://github.com/callMeJZ/Flyrank-crud-api.git)
+git clone https://github.com/callMeJZ/Flyrank-crud-api.git
 
 ### 2. Enter the directory
 
