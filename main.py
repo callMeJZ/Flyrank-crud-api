@@ -1,5 +1,6 @@
 from fastapi import FastAPI,  HTTPException
 from pydantic import BaseModel
+from database import get_connection
 
 app = FastAPI()
 
@@ -35,19 +36,45 @@ def health():
 
 @app.get("/tasks")
 def get_tasks():
-    return tasks
+    conn = get_connection()
+
+    rows = conn.execute(
+        "SELECT id, title, done FROM tasks"
+    ).fetchall()
+
+    conn.close()
+
+    return [
+        {
+            "id": row["id"],
+            "title": row["title"],
+            "done": bool(row["done"])
+        }
+        for row in rows
+    ]
 
 @app.get("/tasks/{task_id}")
 def get_task(task_id: int):
-    for task in tasks:
-        if task["id"] == task_id:
-            return task
+    conn = get_connection()
 
-    raise HTTPException(
-        status_code=404,
-        detail=f"Task {task_id} not found"
-    )
+    row = conn.execute(
+        "SELECT id, title, done FROM tasks WHERE id = ?",
+        (task_id,)
+    ).fetchone()
 
+    conn.close()
+
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task {task_id} not found"
+        )
+
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "done": bool(row["done"])
+    }
 class TaskCreate(BaseModel):
     title: str
 
