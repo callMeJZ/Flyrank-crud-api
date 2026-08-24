@@ -49,6 +49,34 @@ flyrank-w2-crud-api/
 | `README.md` | Project documentation. |
 | `venv/` | Python virtual environment used for the project. It should not be committed to GitHub. |
 
+## Docker and PostgreSQL
+
+For A3, the project uses PostgreSQL running inside a Docker container.
+
+### Start PostgreSQL
+
+The PostgreSQL container is started with:
+
+```bash
+docker run --name taskdb -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=tasks -p 5432:5432 -v taskdata:/var/lib/postgresql/data -d postgres:17
+```
+
+The container is named `taskdb`, uses the `tasks` database, and stores its database data in the `taskdata` Docker volume.
+
+To check that the container is running:
+
+```bash
+docker ps
+```
+
+To open the PostgreSQL database:
+
+```bash
+docker exec -it taskdb psql -U postgres -d tasks
+```
+
+At this stage, the PostgreSQL database does not contain any tables yet. The `tasks` table will be created automatically when the FastAPI application is connected to PostgreSQL in Stage 1.
+
 ## Database
 
 This project uses SQLite instead of an in-memory Python list. SQLite is lightweight, does not require a separate database server, and stores the database in a single file, `tasks.db`.
