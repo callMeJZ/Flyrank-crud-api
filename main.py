@@ -1,4 +1,4 @@
-from fastapi import FastAPI,  HTTPException
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from database import get_connection
 
@@ -22,17 +22,20 @@ tasks = [
     }
 ]
 
+
 @app.get("/")
 def root():
     return {
-        "name": "TaskAPI", 
+        "name": "TaskAPI",
         "version": "1.0",
         "endpoints": ["/tasks"]
     }
 
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
 
 @app.get("/tasks")
 def get_tasks():
@@ -53,12 +56,13 @@ def get_tasks():
         for row in rows
     ]
 
+
 @app.get("/tasks/{task_id}")
 def get_task(task_id: int):
     conn = get_connection()
 
     row = conn.execute(
-        "SELECT id, title, done FROM tasks WHERE id = ?",
+        "SELECT id, title, done FROM tasks WHERE id = %s",
         (task_id,)
     ).fetchone()
 
@@ -75,6 +79,8 @@ def get_task(task_id: int):
         "title": row["title"],
         "done": bool(row["done"])
     }
+
+
 class TaskCreate(BaseModel):
     title: str
 
@@ -90,14 +96,13 @@ def create_task(task_data: TaskCreate):
     conn = get_connection()
 
     cursor = conn.execute(
-        "INSERT INTO tasks (title, done) VALUES (?, ?)",
+        "INSERT INTO tasks (title, done) VALUES (%s, %s) RETURNING id",
         (task_data.title, False)
     )
 
+    new_id = cursor.fetchone()["id"]
+
     conn.commit()
-
-    new_id = cursor.lastrowid
-
     conn.close()
 
     return {
@@ -106,16 +111,18 @@ def create_task(task_data: TaskCreate):
         "done": False
     }
 
+
 class TaskUpdate(BaseModel):
     title: str | None = None
     done: bool | None = None
+
 
 @app.put("/tasks/{task_id}")
 def update_task(task_id: int, task_data: TaskUpdate):
     conn = get_connection()
 
     row = conn.execute(
-        "SELECT id, title, done FROM tasks WHERE id = ?",
+        "SELECT id, title, done FROM tasks WHERE id = %s",
         (task_id,)
     ).fetchone()
 
@@ -143,7 +150,7 @@ def update_task(task_id: int, task_data: TaskUpdate):
         done = task_data.done
 
     conn.execute(
-        "UPDATE tasks SET title = ?, done = ? WHERE id = ?",
+        "UPDATE tasks SET title = %s, done = %s WHERE id = %s",
         (title, done, task_id)
     )
 
@@ -156,12 +163,13 @@ def update_task(task_id: int, task_data: TaskUpdate):
         "done": done
     }
 
+
 @app.delete("/tasks/{task_id}", status_code=204)
 def delete_task(task_id: int):
     conn = get_connection()
 
     row = conn.execute(
-        "SELECT id FROM tasks WHERE id = ?",
+        "SELECT id FROM tasks WHERE id = %s",
         (task_id,)
     ).fetchone()
 
@@ -173,7 +181,7 @@ def delete_task(task_id: int):
         )
 
     conn.execute(
-        "DELETE FROM tasks WHERE id = ?",
+        "DELETE FROM tasks WHERE id = %s",
         (task_id,)
     )
 
