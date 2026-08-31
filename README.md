@@ -1,31 +1,31 @@
 # TaskAPI
 
-TaskAPI is a simple CRUD API built with Python, FastAPI, and SQLite.
+TaskAPI is a simple CRUD API built with Python, FastAPI, and PostgreSQL.
 
-The project started as an in-memory CRUD API and was updated to use a real SQLite database for persistent data storage.
+The project started as an in-memory CRUD API, was first updated to use SQLite for persistent storage, and was then migrated to PostgreSQL running in Docker. The current version uses Docker Compose to run both the FastAPI application and PostgreSQL database as a single stack.
 
 ## Features
 
-- Create tasks
-- Read all tasks
-- Read a single task
-- Update tasks
-- Delete tasks
+- Create, read, update, and delete tasks
 - Validate task titles
 - Return appropriate HTTP status codes
-- Store tasks in a SQLite database
-- Automatically create the database and table
-- Automatically insert three example tasks when the table is empty
-- Persist data between server restarts
+- Store tasks in PostgreSQL
+- Automatically create the `tasks` table
+- Automatically seed three example tasks when the table is empty
+- Persist PostgreSQL data using a Docker volume
+- Run the API and database using Docker Compose
+- Provide interactive API documentation through Swagger UI
 
 ## Technologies
 
-- Python
+- Python 3.13
 - FastAPI
 - Uvicorn
-- SQLite
+- PostgreSQL 17
+- Psycopg
 - Pydantic
-- DB Browser for SQLite
+- Docker
+- Docker Compose
 
 ## Project Structure
 
@@ -33,63 +33,168 @@ The project started as an in-memory CRUD API and was updated to use a real SQLit
 flyrank-w2-crud-api/
 ├── main.py
 ├── database.py
-├── tasks.db
-├── README.md
+├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
 ├── .gitignore
-└── venv/
+├── README.md
+└── docker-evidence.png
 ```
-
-### File Breakdown
 
 | File | Description |
 | --- | --- |
-| `main.py` | Contains the FastAPI application and CRUD endpoints. |
-| `database.py` | Handles the SQLite connection, table creation, and initial example data. |
-| `tasks.db` | The SQLite database file where tasks are stored. |
+| `main.py` | FastAPI application and CRUD endpoints. |
+| `database.py` | PostgreSQL connection, table creation, and seed data. |
+| `requirements.txt` | Python dependencies. |
+| `Dockerfile` | Instructions for building the API image. |
+| `docker-compose.yml` | Defines the API and PostgreSQL services. |
+| `.env.example` | Example environment variables required by the stack. |
+| `.gitignore` | Excludes `.env`, virtual environments, and other local files. |
+| `docker-evidence.png` | PostgreSQL `psql` evidence screenshot. |
 | `README.md` | Project documentation. |
-| `venv/` | Python virtual environment used for the project. It should not be committed to GitHub. |
 
-## Docker and PostgreSQL
+## PostgreSQL Database
 
-For A3, the project uses PostgreSQL running inside a Docker container.
+The current version uses PostgreSQL instead of SQLite. PostgreSQL runs in the `taskdb` Docker container and uses the `tasks` database.
 
-### Start PostgreSQL
+The application connects through the `DATABASE_URL` environment variable.
 
-The PostgreSQL container is started with:
+### Tasks Table
 
-```bash
-docker run --name taskdb -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=tasks -p 5432:5432 -v taskdata:/var/lib/postgresql/data -d postgres:17
+The application automatically creates the `tasks` table when it starts:
+
+```sql
+CREATE TABLE IF NOT EXISTS tasks (
+    id SERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    done BOOLEAN NOT NULL
+);
 ```
-
-The container is named `taskdb`, uses the `tasks` database, and stores its database data in the `taskdata` Docker volume.
-
-To check that the container is running:
-
-```bash
-docker ps
-```
-
-To open the PostgreSQL database:
-
-```bash
-docker exec -it taskdb psql -U postgres -d tasks
-```
-
-At this stage, the PostgreSQL database does not contain any tables yet. The `tasks` table will be created automatically when the FastAPI application is connected to PostgreSQL in Stage 1.
-
-## Database
-
-This project uses SQLite instead of an in-memory Python list. SQLite is lightweight, does not require a separate database server, and stores the database in a single file, `tasks.db`.
-
-The application automatically creates the database and the `tasks` table if they do not exist. Three example tasks are inserted only when the table is empty.
-
-### Tasks Table Schema
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `id` | `INTEGER` | Unique identifier for each task. |
+| `id` | `SERIAL` | Unique task identifier. |
 | `title` | `TEXT` | Task title. |
-| `done` | `BOOLEAN` | Indicates whether the task is completed. |
+| `done` | `BOOLEAN` | Whether the task is completed. |
+
+When the table is empty, the application inserts:
+
+```text
+Buy groceries
+Study Python
+Finish CRUD API
+```
+
+## Docker Compose
+
+Docker Compose runs the complete stack:
+
+```text
+                 Docker Compose
+                       |
+              +--------+--------+
+              |                 |
+              v                 v
+       FastAPI API        PostgreSQL
+     taskapi-container       taskdb
+              |                 |
+              +--------+--------+
+                       |
+                 Docker network
+```
+
+The API uses the Compose database service name `db` rather than `localhost` when connecting to PostgreSQL from inside the API container.
+
+## Environment Variables
+
+Copy `.env.example` to `.env` before starting the stack.
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Linux/macOS:
+
+```bash
+cp .env.example .env
+```
+
+The example file contains:
+
+```env
+POSTGRES_PASSWORD=dev
+POSTGRES_DB=tasks
+DATABASE_URL=postgresql://postgres:dev@db:5432/tasks
+```
+
+| Variable | Description |
+| --- | --- |
+| `POSTGRES_PASSWORD` | Password used by PostgreSQL. |
+| `POSTGRES_DB` | PostgreSQL database name. |
+| `DATABASE_URL` | Connection string used by FastAPI. |
+
+The real `.env` file is ignored by Git and must not be committed.
+
+## Running the Project
+
+### 1. Clone the repository
+
+```bash
+git clone <your-repository-url>
+```
+
+### 2. Enter the project directory
+
+```bash
+cd flyrank-w2-crud-api
+```
+
+### 3. Create `.env`
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Linux/macOS:
+
+```bash
+cp .env.example .env
+```
+
+### 4. Start everything
+
+```bash
+docker compose up
+```
+
+If the API image needs to be rebuilt:
+
+```bash
+docker compose up --build
+```
+
+Docker Compose creates the network and volume, starts PostgreSQL, waits for the database health check, and starts the FastAPI application.
+
+**No manual database or table setup is required.**
+
+## API
+
+API base URL:
+
+```text
+http://localhost:8000
+```
+
+Swagger UI:
+
+```text
+http://localhost:8000/docs
+```
 
 ## API Endpoints
 
@@ -103,67 +208,11 @@ The application automatically creates the database and the `tasks` table if they
 | `PUT` | `/tasks/{task_id}` | Updates a task. |
 | `DELETE` | `/tasks/{task_id}` | Deletes a task. |
 
-## Running the Project
-
-1. Clone the repository:
-
-   ```bash
-   git clone <your-repository-url>
-   ```
-
-2. Navigate to the project:
-
-   ```bash
-   cd flyrank-w2-crud-api
-   ```
-
-3. Create a virtual environment:
-
-   ```bash
-   python -m venv venv
-   ```
-
-4. Activate the virtual environment.
-
-   **Windows PowerShell**
-
-   ```powershell
-   .\venv\Scripts\Activate.ps1
-   ```
-
-   **Windows Command Prompt**
-
-   ```cmd
-   venv\Scripts\activate
-   ```
-
-5. Install the required packages:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-6. Start the FastAPI server:
-
-   ```bash
-   uvicorn main:app --reload
-   ```
-
-The API will be available at <http://127.0.0.1:8000>.
-
-## Swagger UI
-
-FastAPI automatically provides interactive API documentation at <http://127.0.0.1:8000/docs>.
-
-Use Swagger UI to test all CRUD endpoints interactively.
-
 ## Example Requests
 
 ### Create a Task
 
 `POST /tasks`
-
-Request body:
 
 ```json
 {
@@ -171,7 +220,7 @@ Request body:
 }
 ```
 
-Successful response (`201 Created`):
+Example response:
 
 ```json
 {
@@ -184,8 +233,6 @@ Successful response (`201 Created`):
 ### Get All Tasks
 
 `GET /tasks`
-
-Example response (`200 OK`):
 
 ```json
 [
@@ -211,8 +258,6 @@ Example response (`200 OK`):
 
 `PUT /tasks/1`
 
-Request body:
-
 ```json
 {
   "title": "Buy groceries and milk",
@@ -224,13 +269,15 @@ Request body:
 
 `DELETE /tasks/1`
 
-Successful response: `204 No Content`
+Successful response:
+
+```text
+204 No Content
+```
 
 ## Validation and Error Handling
 
-The API validates task titles. An empty title returns `400 Bad Request`.
-
-Example request:
+An empty or whitespace-only title returns `400 Bad Request`.
 
 ```json
 {
@@ -246,9 +293,15 @@ Response:
 }
 ```
 
-Requesting a task ID that does not exist returns `404 Not Found`.
+A task ID that does not exist returns `404 Not Found`.
 
-Example: `GET /tasks/999`
+Example:
+
+```text
+GET /tasks/999
+```
+
+Response:
 
 ```json
 {
@@ -256,101 +309,212 @@ Example: `GET /tasks/999`
 }
 ```
 
-## SQL Queries Explored
+## API Test Evidence
 
-DB Browser for SQLite was used to inspect and modify the database manually.
+The running Docker Compose stack was tested with:
 
-### 1. List Every Task
+```bash
+curl -i http://localhost:8000/tasks
+```
+
+Actual response:
+
+```text
+HTTP/1.1 200 OK
+date: Sun, 30 Aug 2026 18:03:28 GMT
+server: uvicorn
+content-length: 140
+content-type: application/json
+
+[{"id":1,"title":"Buy groceries","done":false},{"id":2,"title":"Study Python","done":false},{"id":3,"title":"Finish CRUD API","done":false}]
+```
+
+This confirms that the API returns the seeded tasks from PostgreSQL.
+
+## PostgreSQL Database Evidence
+
+The database was inspected from inside the running PostgreSQL container:
+
+```powershell
+docker exec -it taskdb psql -U postgres -d tasks
+```
+
+The table was verified with:
+
+```sql
+\dt
+```
+
+The data was verified with:
 
 ```sql
 SELECT * FROM tasks;
 ```
 
-### 2. Show Completed Tasks
+The database contained:
 
-```sql
-SELECT * FROM tasks WHERE done = 1;
+```text
+ id |      title      | done
+----+-----------------+------
+  1 | Buy groceries   | f
+  2 | Study Python    | f
+  3 | Finish CRUD API | f
 ```
 
-### 3. Count All Tasks
+### Database Screenshot
 
-```sql
-SELECT COUNT(*) FROM tasks;
+![PostgreSQL database showing the tasks table and seeded data](docker-evidence.png)
+
+## Docker Verification
+
+The stack was verified with:
+
+```bash
+docker compose ps
 ```
 
-### 4. Mark Every Task as Completed
+Expected services:
 
-```sql
-UPDATE tasks SET done = 1;
+```text
+NAME                IMAGE                     SERVICE   STATUS
+taskapi-container   flyrank-w2-crud-api-api   api       Up
+taskdb              postgres:17               db        Up (healthy)
 ```
 
-### 5. Delete All Completed Tasks
-
-```sql
-DELETE FROM tasks WHERE done = 1;
-```
-
-The changes made directly to SQLite were verified through the FastAPI Swagger UI.
-
-## Database Screenshot
-
-The SQLite database was opened and inspected using DB Browser for SQLite.
-
-![Database screenshot showing the tasks table in DB Browser for SQLite](database-screenshot.png)
+The API container successfully connects to PostgreSQL through the Docker Compose network.
 
 ## Persistence
 
-The original CRUD API stored tasks in an in-memory Python list, so tasks were lost whenever the server restarted. The project now uses SQLite for persistent storage.
+PostgreSQL data is stored in the Docker named volume `taskdata`.
+
+This allows database data to persist independently of the PostgreSQL container.
+
+The current application does not depend on a local SQLite database file.
+
+## Previous SQLite Version
+
+Earlier versions of TaskAPI used SQLite for persistent storage.
+
+That version demonstrated database creation, table creation, seed data, CRUD operations, persistence, and SQL queries.
+
+The current version replaces SQLite with PostgreSQL running in Docker while keeping the same CRUD API structure.
+
+## Security and Environment Configuration
+
+The real `.env` file is excluded from version control.
+
+The repository contains `.env.example` so another developer can see the required configuration without exposing the local environment file.
+
+The `.gitignore` includes:
 
 ```text
-Client
-  |
-FastAPI
-  |
-SQLite
-  |
-tasks.db
+.env
 ```
 
-Because tasks are stored in `tasks.db`, they remain available after the FastAPI server is restarted.
+The setup flow is:
 
-## Database Initialization
+```text
+.env.example
+     |
+     | copy
+     v
+   .env
+     |
+     v
+docker compose up
+```
 
-When the application starts:
+## One-Command Stack Checkpoint
 
-1. The SQLite database is created if it does not exist.
-2. The `tasks` table is created if it does not exist.
-3. The application checks whether the `tasks` table is empty.
-4. Three example tasks are inserted only when the table is empty.
+After cloning the repository, a developer should only need to create `.env` from `.env.example` and start Docker Compose.
 
-This prevents the example tasks from being duplicated every time the application starts.
+```bash
+git clone <your-repository-url>
+cd flyrank-w2-crud-api
+cp .env.example .env
+docker compose up
+```
+
+On Windows PowerShell:
+
+```powershell
+git clone <your-repository-url>
+cd flyrank-w2-crud-api
+Copy-Item .env.example .env
+docker compose up
+```
+
+Then:
+
+```bash
+curl http://localhost:8000/tasks
+```
+
+The API should return the three seeded tasks.
+
+No manual PostgreSQL database creation, table creation, or Docker network creation is required.
 
 ## Learning Outcome
 
-This project demonstrates the separation between the API layer and the data layer. The API endpoints remain the same even though the storage implementation changed from an in-memory list to a SQLite database.
+This project demonstrates:
 
-The client still uses:
+- FastAPI REST API development
+- CRUD operations
+- Pydantic validation
+- PostgreSQL integration
+- Parameterized SQL queries
+- Docker containerization
+- Docker Compose
+- Environment-based configuration
+- Docker networking
+- Persistent Docker volumes
+- Swagger API testing
+- curl API testing
+- PostgreSQL inspection using `psql`
 
-- `GET /tasks`
-- `POST /tasks`
-- `PUT /tasks/{id}`
-- `DELETE /tasks/{id}`
+## Stage 5 Assignment Checklist
 
-The main difference is that the data is now stored persistently in a real database.
+### Database
 
-## Assignment Checklist
-
-- [x] SQLite database created
+- [x] PostgreSQL database created
 - [x] `tasks` table created automatically
-- [x] Three example tasks inserted only when the table is empty
-- [x] `GET` endpoints connected to SQLite
-- [x] `POST` endpoint connected to SQLite
-- [x] `PUT` endpoint connected to SQLite
-- [x] `DELETE` endpoint connected to SQLite
-- [x] Data survives server restarts
+- [x] Three example tasks inserted when the table is empty
+- [x] CRUD operations connected to PostgreSQL
+- [x] Database data stored using a Docker volume
+- [x] Database inspected using `psql`
+
+### API
+
+- [x] `GET /`
+- [x] `GET /health`
+- [x] `GET /tasks`
+- [x] `GET /tasks/{task_id}`
+- [x] `POST /tasks`
+- [x] `PUT /tasks/{task_id}`
+- [x] `DELETE /tasks/{task_id}`
 - [x] Unknown IDs return `404`
 - [x] Invalid titles return `400`
-- [x] SQL queries explored using DB Browser for SQLite
-- [x] Database changes verified through the API
-- [x] Database screenshot added
-- [x] README updated
+- [x] API tested through Swagger
+- [x] `curl -i` evidence captured
+
+### Docker
+
+- [x] Dockerfile created
+- [x] FastAPI Docker image built
+- [x] PostgreSQL runs in Docker
+- [x] Docker Compose configuration created
+- [x] API and database run as one Compose stack
+- [x] Docker network handled by Compose
+- [x] PostgreSQL health check configured
+- [x] PostgreSQL data stored in a named volume
+
+### Configuration and Documentation
+
+- [x] `.env` is git-ignored
+- [x] `.env.example` committed
+- [x] One-command startup documented
+- [x] Environment variables documented
+- [x] Complete endpoint table included
+- [x] `curl -i` output included
+- [x] PostgreSQL `psql` screenshot included
+- [x] README updated for PostgreSQL and Docker Compose
