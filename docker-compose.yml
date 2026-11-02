@@ -20,6 +20,8 @@ services:
     container_name: taskapi-container
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_KEY: ${SUPABASE_KEY:-}
     ports:
       - "8000:8000"
     depends_on:

@@ -4,6 +4,46 @@ TaskAPI is a simple CRUD API built with Python, FastAPI, and PostgreSQL.
 
 The project started as an in-memory CRUD API, was first updated to use SQLite for persistent storage, and was then migrated to PostgreSQL running in Docker. The current version uses Docker Compose to run both the FastAPI application and PostgreSQL database as a single stack.
 
+## Auth Assignment - Stage 0
+
+The Supabase Auth setup is prepared. Supabase values can be added later: the existing CRUD API starts with a setup-pending message when they are blank. Signup, login, logout, and protected routes belong to the following stages and are not implemented yet.
+
+1. Create a Supabase project at <https://supabase.com/dashboard>.
+2. Copy the project URL and its public anon key (as requested by the assignment), or the newer publishable key. Do not use a service-role or secret key.
+3. For this practice assignment, open Authentication > Sign In / Providers > Email, disable Confirm email, and save. Enable email confirmation for production.
+4. Fill in these existing entries in your local `.env`:
+
+   ```dotenv
+   SUPABASE_URL=https://your-project-ref.supabase.co
+   SUPABASE_KEY=your_supabase_public_key
+   ```
+
+5. Start or rebuild the stack:
+
+   ```powershell
+   docker compose up --build -d
+   ```
+
+6. Verify the API and Supabase connection:
+
+   ```powershell
+   curl.exe -i http://localhost:8000/health
+   docker compose exec api python check_supabase.py
+   ```
+
+The health endpoint should return `200 OK` with `{"status":"ok"}`. Once Supabase is configured, the connection check should print:
+
+```text
+Supabase client initialized
+Supabase Auth reachable: 200
+```
+
+Client initialization alone does not verify a connection. `check_supabase.py` also requests Supabase Auth's public settings endpoint using the configured public API key. With blank settings it exits with an instruction to configure `.env`.
+
+`supabase_client.py` creates clients on demand with session persistence and automatic refresh disabled. Future auth handlers can obtain separate clients rather than sharing one user's session with another request. Docker Compose passes the settings into the API container. `.dockerignore` excludes the local `.env` from the Docker build context; `.gitignore` excludes it from Git.
+
+Stage 0's Supabase connectivity checkpoint remains pending until real configuration is supplied and the connection check succeeds. The API continues to use port 8000.
+
 ## Features
 
 - Create, read, update, and delete tasks
@@ -20,6 +60,7 @@ The project started as an in-memory CRUD API, was first updated to use SQLite fo
 
 - Python 3.13
 - FastAPI
+- Supabase Python SDK (Auth setup)
 - Uvicorn
 - PostgreSQL 17
 - Psycopg
@@ -33,11 +74,14 @@ The project started as an in-memory CRUD API, was first updated to use SQLite fo
 flyrank-w2-crud-api/
 ├── main.py
 ├── database.py
+├── supabase_client.py
+├── check_supabase.py
 ├── requirements.txt
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example
 ├── .gitignore
+├── .dockerignore
 ├── README.md
 └── docker-evidence.png
 ```
@@ -46,11 +90,14 @@ flyrank-w2-crud-api/
 | --- | --- |
 | `main.py` | FastAPI application and CRUD endpoints. |
 | `database.py` | PostgreSQL connection, table creation, and seed data. |
+| `supabase_client.py` | Environment configuration and per-caller Supabase client factory. |
+| `check_supabase.py` | Supabase SDK initialization and Auth connectivity checkpoint. |
 | `requirements.txt` | Python dependencies. |
 | `Dockerfile` | Instructions for building the API image. |
 | `docker-compose.yml` | Defines the API and PostgreSQL services. |
 | `.env.example` | Example environment variables required by the stack. |
 | `.gitignore` | Excludes `.env`, virtual environments, and other local files. |
+| `.dockerignore` | Excludes local environment files and development files from the image. |
 | `docker-evidence.png` | PostgreSQL `psql` evidence screenshot. |
 | `README.md` | Project documentation. |
 
@@ -135,6 +182,8 @@ DATABASE_URL=postgresql://postgres:dev@db:5432/tasks
 | `POSTGRES_PASSWORD` | Password used by PostgreSQL. |
 | `POSTGRES_DB` | PostgreSQL database name. |
 | `DATABASE_URL` | Connection string used by FastAPI. |
+| `SUPABASE_URL` | Supabase project URL; blank until Auth is configured. |
+| `SUPABASE_KEY` | Supabase public anon or publishable key; blank until Auth is configured. |
 
 The real `.env` file is ignored by Git and must not be committed.
 

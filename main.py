@@ -1,8 +1,29 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from database import get_connection
+from supabase_client import is_supabase_configured
 
-app = FastAPI()
+logger = logging.getLogger("uvicorn.error")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if is_supabase_configured():
+        logger.info(
+            "Supabase configuration found. Run check_supabase.py to verify connectivity."
+        )
+    else:
+        logger.warning(
+            "Supabase setup is pending. Add SUPABASE_URL and SUPABASE_KEY to .env; "
+            "the CRUD API is available."
+        )
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 tasks = [
     {
