@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -119,6 +119,32 @@ def login(credentials: AuthCredentials):
         "access_token": result.session.access_token,
         "refresh_token": result.session.refresh_token,
     }
+
+
+@app.get("/public/info")
+def public_info():
+    return {"message": "Welcome stranger! This info is public."}
+
+
+def access_token_error():
+    return JSONResponse(
+        status_code=401,
+        content={"error": "Access token required"},
+    )
+
+
+@app.get("/protected/profile")
+def protected_profile(authorization: str | None = Header(default=None)):
+    if authorization is None:
+        return access_token_error()
+
+    auth_parts = authorization.strip().split()
+    if len(auth_parts) != 2 or auth_parts[0].lower() != "bearer":
+        return access_token_error()
+
+    _access_token = auth_parts[1]
+    # Stage 2 only checks that a bearer token was supplied. Stage 3 verifies it.
+    return {"message": "Access token received"}
 
 tasks = [
     {
