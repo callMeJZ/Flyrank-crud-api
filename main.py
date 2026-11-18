@@ -2,9 +2,12 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from supabase_auth.errors import AuthApiError
 from database import get_connection
-from supabase_client import is_supabase_configured
+from supabase_client import get_supabase_client, is_supabase_configured
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -24,6 +27,98 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+class AuthCredentials(BaseModel):
+    email: str | None = None
+    password: str | None = None
+
+
+def credentials_error():
+    return JSONResponse(
+        status_code=400,
+        content={"error": "Email and password are required"},
+    )
+
+
+@app.post("/auth/signup", status_code=201)
+def signup(credentials: AuthCredentials):
+    if (
+        credentials.email is None
+        or not credentials.email.strip()
+        or credentials.password is None
+        or not credentials.password.strip()
+    ):
+        return credentials_error()
+
+    try:
+        result = get_supabase_client().auth.sign_up(
+            {
+                "email": credentials.email.strip(),
+                "password": credentials.password,
+            }
+        )
+    except AuthApiError as exc:
+        if exc.status >= 500:
+            raise HTTPException(
+                status_code=502,
+                detail="Supabase Auth could not create the account",
+            ) from None
+        return JSONResponse(
+            status_code=400,
+            content={"error": exc.message},
+        )
+
+    if result.user is None:
+        raise HTTPException(
+            status_code=502,
+            detail="Supabase Auth did not return a user",
+        )
+
+    return JSONResponse(
+        status_code=201,
+        content=jsonable_encoder(result.user),
+    )
+
+
+@app.post("/auth/login")
+def login(credentials: AuthCredentials):
+    if (
+        credentials.email is None
+        or not credentials.email.strip()
+        or credentials.password is None
+        or not credentials.password.strip()
+    ):
+        return credentials_error()
+
+    try:
+        result = get_supabase_client().auth.sign_in_with_password(
+            {
+                "email": credentials.email.strip(),
+                "password": credentials.password,
+            }
+        )
+    except AuthApiError as exc:
+        if exc.status in (400, 401):
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid login credentials"},
+            )
+        raise HTTPException(
+            status_code=502,
+            detail="Supabase Auth could not complete the login",
+        ) from None
+
+    if result.session is None:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Invalid login credentials"},
+        )
+
+    return {
+        "access_token": result.session.access_token,
+        "refresh_token": result.session.refresh_token,
+    }
 
 tasks = [
     {
