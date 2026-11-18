@@ -19,7 +19,7 @@ services:
     build: .
     container_name: taskapi-container
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL_DOCKER:-postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}}
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_KEY: ${SUPABASE_KEY:-}
     ports:

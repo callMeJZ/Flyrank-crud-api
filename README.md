@@ -105,7 +105,7 @@ flyrank-w2-crud-api/
 
 The current version uses PostgreSQL instead of SQLite. PostgreSQL runs in the `taskdb` Docker container and uses the `tasks` database.
 
-The application connects through the `DATABASE_URL` environment variable.
+When running Uvicorn directly on your computer, the application connects through `DATABASE_URL` at `localhost:5432`. Docker Compose gives the API container `DATABASE_URL_DOCKER`, which uses the Compose database hostname `db`.
 
 ### Tasks Table
 
@@ -174,7 +174,8 @@ The example file contains:
 ```env
 POSTGRES_PASSWORD=dev
 POSTGRES_DB=tasks
-DATABASE_URL=postgresql://postgres:dev@db:5432/tasks
+DATABASE_URL=postgresql://postgres:dev@localhost:5432/tasks
+DATABASE_URL_DOCKER=postgresql://postgres:dev@db:5432/tasks
 ```
 
 | Variable | Description |
@@ -182,6 +183,7 @@ DATABASE_URL=postgresql://postgres:dev@db:5432/tasks
 | `POSTGRES_PASSWORD` | Password used by PostgreSQL. |
 | `POSTGRES_DB` | PostgreSQL database name. |
 | `DATABASE_URL` | Connection string used by FastAPI. |
+| `DATABASE_URL_DOCKER` | Connection string used by the API container in Docker Compose. |
 | `SUPABASE_URL` | Supabase project URL; blank until Auth is configured. |
 | `SUPABASE_KEY` | Supabase public anon or publishable key; blank until Auth is configured. |
 
@@ -220,6 +222,14 @@ cp .env.example .env
 ```bash
 docker compose up
 ```
+
+To run Uvicorn directly on Windows instead, start PostgreSQL with `docker compose up -d db`, then run:
+
+```powershell
+uvicorn main:app --reload --port 8000
+```
+
+The local `DATABASE_URL` must use `localhost:5432`; the Compose API uses `DATABASE_URL_DOCKER` and the hostname `db`.
 
 If the API image needs to be rebuilt:
 
