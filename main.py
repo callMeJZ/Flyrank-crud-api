@@ -142,9 +142,32 @@ def protected_profile(authorization: str | None = Header(default=None)):
     if len(auth_parts) != 2 or auth_parts[0].lower() != "bearer":
         return access_token_error()
 
-    _access_token = auth_parts[1]
-    # Stage 2 only checks that a bearer token was supplied. Stage 3 verifies it.
-    return {"message": "Access token received"}
+    access_token = auth_parts[1]
+    try:
+        result = get_supabase_client().auth.get_user(access_token)
+    except AuthApiError as exc:
+        if exc.status in (400, 401, 403) or exc.code in ("bad_jwt", "invalid_jwt"):
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid or expired token"},
+            )
+        raise HTTPException(
+            status_code=502,
+            detail="Supabase Auth could not verify the access token",
+        ) from None
+
+    if result is None or result.user is None:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Invalid or expired token"},
+        )
+
+    user = result.user
+    return {
+        "id": user.id,
+        "email": user.email,
+        "created_at": user.created_at,
+    }
 
 tasks = [
     {
