@@ -1,579 +1,129 @@
-# TaskAPI
+﻿# TaskAPI
 
-TaskAPI is a simple CRUD API built with Python, FastAPI, and PostgreSQL.
-
-The project started as an in-memory CRUD API, was first updated to use SQLite for persistent storage, and was then migrated to PostgreSQL running in Docker. The current version uses Docker Compose to run both the FastAPI application and PostgreSQL database as a single stack.
-
-## Auth Assignment - Stage 0
-
-The Supabase Auth setup is prepared. Supabase values can be added later: the existing CRUD API starts with a setup-pending message when they are blank. Signup, login, logout, and protected routes belong to the following stages and are not implemented yet.
-
-1. Create a Supabase project at <https://supabase.com/dashboard>.
-2. Copy the project URL and its public anon key (as requested by the assignment), or the newer publishable key. Do not use a service-role or secret key.
-3. For this practice assignment, open Authentication > Sign In / Providers > Email, disable Confirm email, and save. Enable email confirmation for production.
-4. Fill in these existing entries in your local `.env`:
-
-   ```dotenv
-   SUPABASE_URL=https://your-project-ref.supabase.co
-   SUPABASE_KEY=your_supabase_public_key
-   ```
-
-5. Start or rebuild the stack:
-
-   ```powershell
-   docker compose up --build -d
-   ```
-
-6. Verify the API and Supabase connection:
-
-   ```powershell
-   curl.exe -i http://localhost:8000/health
-   docker compose exec api python check_supabase.py
-   ```
-
-The health endpoint should return `200 OK` with `{"status":"ok"}`. Once Supabase is configured, the connection check should print:
-
-```text
-Supabase client initialized
-Supabase Auth reachable: 200
-```
-
-Client initialization alone does not verify a connection. `check_supabase.py` also requests Supabase Auth's public settings endpoint using the configured public API key. With blank settings it exits with an instruction to configure `.env`.
-
-`supabase_client.py` creates clients on demand with session persistence and automatic refresh disabled. Future auth handlers can obtain separate clients rather than sharing one user's session with another request. Docker Compose passes the settings into the API container. `.dockerignore` excludes the local `.env` from the Docker build context; `.gitignore` excludes it from Git.
-
-Stage 0's Supabase connectivity checkpoint remains pending until real configuration is supplied and the connection check succeeds. The API continues to use port 8000.
+TaskAPI is a FastAPI service that combines PostgreSQL-backed task CRUD with Supabase Auth. It provides signup and login, verifies Supabase access tokens, and protects user-only routes with a reusable FastAPI dependency.
 
 ## Features
 
-- Create, read, update, and delete tasks
-- Validate task titles
-- Return appropriate HTTP status codes
-- Store tasks in PostgreSQL
-- Automatically create the `tasks` table
-- Automatically seed three example tasks when the table is empty
-- Persist PostgreSQL data using a Docker volume
-- Run the API and database using Docker Compose
-- Provide interactive API documentation through Swagger UI
+- Supabase email signup and password login
+- Supabase JWT verification for protected routes
+- Protected profile, dashboard, and logout routes
+- Public information route
+- PostgreSQL task CRUD with Docker Compose
+- Interactive API documentation at `/docs`
 
-## Technologies
+## Requirements
 
-- Python 3.13
-- FastAPI
-- Supabase Python SDK (Auth setup)
-- Uvicorn
-- PostgreSQL 17
-- Psycopg
-- Pydantic
-- Docker
-- Docker Compose
+- Docker Desktop with the Linux engine enabled, or Python 3.10+ and PostgreSQL
+- A Supabase project for authentication
 
-## Project Structure
+## Configure the environment
 
-```text
-flyrank-w2-crud-api/
-├── main.py
-├── database.py
-├── supabase_client.py
-├── check_supabase.py
-├── requirements.txt
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-├── .gitignore
-├── .dockerignore
-├── README.md
-└── docker-evidence.png
-```
-
-| File | Description |
-| --- | --- |
-| `main.py` | FastAPI application and CRUD endpoints. |
-| `database.py` | PostgreSQL connection, table creation, and seed data. |
-| `supabase_client.py` | Environment configuration and per-caller Supabase client factory. |
-| `check_supabase.py` | Supabase SDK initialization and Auth connectivity checkpoint. |
-| `requirements.txt` | Python dependencies. |
-| `Dockerfile` | Instructions for building the API image. |
-| `docker-compose.yml` | Defines the API and PostgreSQL services. |
-| `.env.example` | Example environment variables required by the stack. |
-| `.gitignore` | Excludes `.env`, virtual environments, and other local files. |
-| `.dockerignore` | Excludes local environment files and development files from the image. |
-| `docker-evidence.png` | PostgreSQL `psql` evidence screenshot. |
-| `README.md` | Project documentation. |
-
-## PostgreSQL Database
-
-The current version uses PostgreSQL instead of SQLite. PostgreSQL runs in the `taskdb` Docker container and uses the `tasks` database.
-
-When running Uvicorn directly on your computer, the application connects through `DATABASE_URL` at `localhost:5432`. Docker Compose gives the API container `DATABASE_URL_DOCKER`, which uses the Compose database hostname `db`.
-
-### Tasks Table
-
-The application automatically creates the `tasks` table when it starts:
-
-```sql
-CREATE TABLE IF NOT EXISTS tasks (
-    id SERIAL PRIMARY KEY,
-    title TEXT NOT NULL,
-    done BOOLEAN NOT NULL
-);
-```
-
-| Column | Type | Description |
-| --- | --- | --- |
-| `id` | `SERIAL` | Unique task identifier. |
-| `title` | `TEXT` | Task title. |
-| `done` | `BOOLEAN` | Whether the task is completed. |
-
-When the table is empty, the application inserts:
-
-```text
-Buy groceries
-Study Python
-Finish CRUD API
-```
-
-## Docker Compose
-
-Docker Compose runs the complete stack:
-
-```text
-                 Docker Compose
-                       |
-              +--------+--------+
-              |                 |
-              v                 v
-       FastAPI API        PostgreSQL
-     taskapi-container       taskdb
-              |                 |
-              +--------+--------+
-                       |
-                 Docker network
-```
-
-The API uses the Compose database service name `db` rather than `localhost` when connecting to PostgreSQL from inside the API container.
-
-## Environment Variables
-
-Copy `.env.example` to `.env` before starting the stack.
-
-Windows PowerShell:
+Copy the example file:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Linux/macOS:
+Set `SUPABASE_URL` and `SUPABASE_KEY` in `.env` using the project URL and its public anon key or publishable key. Do not use a service-role or secret key. Keep `.env` private; it is ignored by Git and excluded from the Docker build context.
 
-```bash
-cp .env.example .env
-```
+For this practice assignment, disable email confirmation in Supabase under **Authentication > Sign In / Providers > Email** so new accounts can log in immediately. Enable it for production.
 
-The example file contains:
-
-```env
-POSTGRES_PASSWORD=dev
-POSTGRES_DB=tasks
-DATABASE_URL=postgresql://postgres:dev@localhost:5432/tasks
-DATABASE_URL_DOCKER=postgresql://postgres:dev@db:5432/tasks
-```
-
-| Variable | Description |
+| Variable | Purpose |
 | --- | --- |
-| `POSTGRES_PASSWORD` | Password used by PostgreSQL. |
+| `SUPABASE_URL` | Supabase project URL. |
+| `SUPABASE_KEY` | Public anon or publishable key for Auth requests. |
+| `POSTGRES_PASSWORD` | Local PostgreSQL password used by Docker Compose. |
 | `POSTGRES_DB` | PostgreSQL database name. |
-| `DATABASE_URL` | Connection string used by FastAPI. |
-| `DATABASE_URL_DOCKER` | Connection string used by the API container in Docker Compose. |
-| `SUPABASE_URL` | Supabase project URL; blank until Auth is configured. |
-| `SUPABASE_KEY` | Supabase public anon or publishable key; blank until Auth is configured. |
+| `DATABASE_URL` | Database URL for running Uvicorn on the host (`localhost`). |
+| `DATABASE_URL_DOCKER` | Database URL used by the API container (`db`). |
 
-The real `.env` file is ignored by Git and must not be committed.
+## Run the API
 
-## Running the Project
-
-### 1. Clone the repository
-
-```bash
-git clone <your-repository-url>
-```
-
-### 2. Enter the project directory
-
-```bash
-cd flyrank-w2-crud-api
-```
-
-### 3. Create `.env`
-
-Windows PowerShell:
+From the project directory, start the API and PostgreSQL with one command:
 
 ```powershell
-Copy-Item .env.example .env
-```
-
-Linux/macOS:
-
-```bash
-cp .env.example .env
-```
-
-### 4. Start everything
-
-```bash
-docker compose up
-```
-
-To run Uvicorn directly on Windows instead, start PostgreSQL with `docker compose up -d db`, then run:
-
-```powershell
-uvicorn main:app --reload --port 8000
-```
-
-The local `DATABASE_URL` must use `localhost:5432`; the Compose API uses `DATABASE_URL_DOCKER` and the hostname `db`.
-
-If the API image needs to be rebuilt:
-
-```bash
 docker compose up --build
 ```
 
-Docker Compose creates the network and volume, starts PostgreSQL, waits for the database health check, and starts the FastAPI application.
+The API is at <http://localhost:8000>, Swagger UI is at <http://localhost:8000/docs>, and PostgreSQL is published on port `5432`. Docker Desktop must be running first.
 
-**No manual database or table setup is required.**
+To run Uvicorn on Windows while PostgreSQL runs in Docker, start only the database and then the API:
 
-## API
-
-API base URL:
-
-```text
-http://localhost:8000
+```powershell
+docker compose up -d db
+uvicorn main:app --reload --port 8000
 ```
 
-Swagger UI:
+Verify Supabase connectivity from the host with:
 
-```text
-http://localhost:8000/docs
+```powershell
+python check_supabase.py
 ```
 
-## API Endpoints
+The successful check prints `Supabase client initialized` and `Supabase Auth reachable: 200`. In the Compose setup, run it with `docker compose exec api python check_supabase.py`.
+
+## Authentication API
+
+| Method | Endpoint | Auth required | Success | Description |
+| --- | --- | --- | --- | --- |
+| `POST` | `/auth/signup` | No | `201 Created` | Creates a Supabase user. Email and password are required (`400` otherwise). |
+| `POST` | `/auth/login` | No | `200 OK` | Authenticates a user and returns access and refresh tokens. Invalid credentials return `401`. |
+| `POST` | `/auth/logout` | Bearer token | `204 No Content` | Verifies the caller and signs out the current Supabase session. |
+| `GET` | `/protected/profile` | Bearer token | `200 OK` | Returns the verified user's ID, email, and account creation date. |
+| `GET` | `/protected/dashboard` | Bearer token | `200 OK` | Example second route protected by the same auth dependency. |
+| `GET` | `/public/info` | No | `200 OK` | Returns public information. |
+
+Protected routes return `401 Unauthorized` for a missing, malformed, invalid, or expired access token. In Swagger, click **Authorize** and paste the access token returned by `/auth/login`; Swagger adds the `Bearer` prefix to requests.
+
+### Example request bodies
+
+Signup and login accept:
+
+```json
+{
+  "email": "you@example.com",
+  "password": "your-test-password"
+}
+```
+
+Use a test account and do not put real passwords or access tokens in the README, source code, or Git history.
+
+After `/auth/login` returns an `access_token`, send it to a protected endpoint:
+
+```powershell
+curl.exe -i http://localhost:8000/protected/profile `
+  -H "Authorization: Bearer <access-token>"
+```
+
+The profile response contains the verified user's `id`, `email`, and `created_at` fields. A missing or invalid token returns `401`.
+
+## Task API
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `GET` | `/` | Returns API information. |
-| `GET` | `/health` | Checks API health. |
-| `GET` | `/tasks` | Returns all tasks. |
-| `GET` | `/tasks/{task_id}` | Returns one task. |
-| `POST` | `/tasks` | Creates a new task. |
-| `PUT` | `/tasks/{task_id}` | Updates a task. |
-| `DELETE` | `/tasks/{task_id}` | Deletes a task. |
+| `GET` | `/` | API information. |
+| `GET` | `/health` | Health check. |
+| `GET` | `/tasks` | List tasks. |
+| `GET` | `/tasks/{task_id}` | Get one task. |
+| `POST` | `/tasks` | Create a task. |
+| `PUT` | `/tasks/{task_id}` | Update a task. |
+| `DELETE` | `/tasks/{task_id}` | Delete a task. |
 
-## Example Requests
+Tasks are stored in PostgreSQL. The app creates the `tasks` table on startup and seeds three example tasks when the table is empty. Docker Compose persists database files in the `taskdata` volume.
 
-### Create a Task
+## Swagger screenshot
 
-`POST /tasks`
+The auth-enabled Swagger screenshot is still needed for this section. Save the screenshot from `/docs` as `swagger-auth.png` in the repository root, then replace this note with:
 
-```json
-{
-  "title": "Buy milk"
-}
+```markdown
+![Swagger UI showing bearer authorization on protected routes](swagger-auth.png)
 ```
 
-Example response:
-
-```json
-{
-  "id": 4,
-  "title": "Buy milk",
-  "done": false
-}
-```
-
-### Get All Tasks
-
-`GET /tasks`
-
-```json
-[
-  {
-    "id": 1,
-    "title": "Buy groceries",
-    "done": false
-  },
-  {
-    "id": 2,
-    "title": "Study Python",
-    "done": false
-  },
-  {
-    "id": 3,
-    "title": "Finish CRUD API",
-    "done": false
-  }
-]
-```
-
-### Update a Task
-
-`PUT /tasks/1`
-
-```json
-{
-  "title": "Buy groceries and milk",
-  "done": true
-}
-```
-
-### Delete a Task
-
-`DELETE /tasks/1`
-
-Successful response:
-
-```text
-204 No Content
-```
-
-## Validation and Error Handling
-
-An empty or whitespace-only title returns `400 Bad Request`.
-
-```json
-{
-  "title": "   "
-}
-```
-
-Response:
-
-```json
-{
-  "detail": "Title cannot be empty"
-}
-```
-
-A task ID that does not exist returns `404 Not Found`.
-
-Example:
-
-```text
-GET /tasks/999
-```
-
-Response:
-
-```json
-{
-  "detail": "Task 999 not found"
-}
-```
-
-## API Test Evidence
-
-The running Docker Compose stack was tested with:
-
-```bash
-curl -i http://localhost:8000/tasks
-```
-
-Actual response:
-
-```text
-HTTP/1.1 200 OK
-date: Sun, 30 Aug 2026 18:03:28 GMT
-server: uvicorn
-content-length: 140
-content-type: application/json
-
-[{"id":1,"title":"Buy groceries","done":false},{"id":2,"title":"Study Python","done":false},{"id":3,"title":"Finish CRUD API","done":false}]
-```
-
-This confirms that the API returns the seeded tasks from PostgreSQL.
-
-## PostgreSQL Database Evidence
-
-The database was inspected from inside the running PostgreSQL container:
-
-```powershell
-docker exec -it taskdb psql -U postgres -d tasks
-```
-
-The table was verified with:
-
-```sql
-\dt
-```
-
-The data was verified with:
-
-```sql
-SELECT * FROM tasks;
-```
-
-The database contained:
-
-```text
- id |      title      | done
-----+-----------------+------
-  1 | Buy groceries   | f
-  2 | Study Python    | f
-  3 | Finish CRUD API | f
-```
-
-### Database Screenshot
-
-![PostgreSQL database showing the tasks table and seeded data](docker-evidence.png)
-
-## Docker Verification
-
-The stack was verified with:
-
-```bash
-docker compose ps
-```
-
-Expected services:
-
-```text
-NAME                IMAGE                     SERVICE   STATUS
-taskapi-container   flyrank-w2-crud-api-api   api       Up
-taskdb              postgres:17               db        Up (healthy)
-```
-
-The API container successfully connects to PostgreSQL through the Docker Compose network.
-
-## Persistence
-
-PostgreSQL data is stored in the Docker named volume `taskdata`.
-
-This allows database data to persist independently of the PostgreSQL container.
-
-The current application does not depend on a local SQLite database file.
-
-## Previous SQLite Version
-
-Earlier versions of TaskAPI used SQLite for persistent storage.
-
-That version demonstrated database creation, table creation, seed data, CRUD operations, persistence, and SQL queries.
-
-The current version replaces SQLite with PostgreSQL running in Docker while keeping the same CRUD API structure.
-
-## Security and Environment Configuration
-
-The real `.env` file is excluded from version control.
-
-The repository contains `.env.example` so another developer can see the required configuration without exposing the local environment file.
-
-The `.gitignore` includes:
-
-```text
-.env
-```
-
-The setup flow is:
-
-```text
-.env.example
-     |
-     | copy
-     v
-   .env
-     |
-     v
-docker compose up
-```
-
-## One-Command Stack Checkpoint
-
-After cloning the repository, a developer should only need to create `.env` from `.env.example` and start Docker Compose.
-
-```bash
-git clone <your-repository-url>
-cd flyrank-w2-crud-api
-cp .env.example .env
-docker compose up
-```
-
-On Windows PowerShell:
-
-```powershell
-git clone <your-repository-url>
-cd flyrank-w2-crud-api
-Copy-Item .env.example .env
-docker compose up
-```
-
-Then:
-
-```bash
-curl http://localhost:8000/tasks
-```
-
-The API should return the three seeded tasks.
-
-No manual PostgreSQL database creation, table creation, or Docker network creation is required.
-
-## Learning Outcome
-
-This project demonstrates:
-
-- FastAPI REST API development
-- CRUD operations
-- Pydantic validation
-- PostgreSQL integration
-- Parameterized SQL queries
-- Docker containerization
-- Docker Compose
-- Environment-based configuration
-- Docker networking
-- Persistent Docker volumes
-- Swagger API testing
-- curl API testing
-- PostgreSQL inspection using `psql`
-
-## Stage 5 Assignment Checklist
-
-### Database
-
-- [x] PostgreSQL database created
-- [x] `tasks` table created automatically
-- [x] Three example tasks inserted when the table is empty
-- [x] CRUD operations connected to PostgreSQL
-- [x] Database data stored using a Docker volume
-- [x] Database inspected using `psql`
-
-### API
-
-- [x] `GET /`
-- [x] `GET /health`
-- [x] `GET /tasks`
-- [x] `GET /tasks/{task_id}`
-- [x] `POST /tasks`
-- [x] `PUT /tasks/{task_id}`
-- [x] `DELETE /tasks/{task_id}`
-- [x] Unknown IDs return `404`
-- [x] Invalid titles return `400`
-- [x] API tested through Swagger
-- [x] `curl -i` evidence captured
-
-### Docker
-
-- [x] Dockerfile created
-- [x] FastAPI Docker image built
-- [x] PostgreSQL runs in Docker
-- [x] Docker Compose configuration created
-- [x] API and database run as one Compose stack
-- [x] Docker network handled by Compose
-- [x] PostgreSQL health check configured
-- [x] PostgreSQL data stored in a named volume
-
-### Configuration and Documentation
-
-- [x] `.env` is git-ignored
-- [x] `.env.example` committed
-- [x] One-command startup documented
-- [x] Environment variables documented
-- [x] Complete endpoint table included
-- [x] `curl -i` output included
-- [x] PostgreSQL `psql` screenshot included
-- [x] README updated for PostgreSQL and Docker Compose
+## Project files
+
+- `main.py` — FastAPI routes, Supabase Auth handlers, and the reusable bearer-token dependency.
+- `supabase_client.py` — Supabase client factory with per-request sessions disabled.
+- `check_supabase.py` — Supabase Auth connectivity check.
+- `database.py` — PostgreSQL connection, table creation, and seed data.
+- `docker-compose.yml` — API and PostgreSQL services.
+- `.env.example` — safe template for local configuration.
