@@ -2,10 +2,11 @@ import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from supabase import Client
 from supabase_auth.errors import AuthApiError
 from supabase_auth.types import User
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+bearer_scheme = HTTPBearer(bearerFormat="JWT", auto_error=False)
 
 
 class AuthenticationError(Exception):
@@ -151,16 +153,15 @@ def public_info():
 
 
 def require_authenticated_user(
-    authorization: str | None = Header(default=None),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> AuthenticatedRequest:
-    if authorization is None:
+    if credentials is None or credentials.scheme.lower() != "bearer":
         raise AuthenticationError(401, "Access token required")
 
-    auth_parts = authorization.strip().split()
-    if len(auth_parts) != 2 or auth_parts[0].lower() != "bearer":
+    access_token = credentials.credentials.strip()
+    if not access_token or any(character.isspace() for character in access_token):
         raise AuthenticationError(401, "Access token required")
 
-    access_token = auth_parts[1]
     try:
         supabase_client = get_supabase_client()
         result = supabase_client.auth.get_user(access_token)
