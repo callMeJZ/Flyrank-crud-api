@@ -1,11 +1,14 @@
 import logging
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
+from supabase import Client
 from supabase_auth.errors import AuthApiError
+from supabase_auth.types import User
 from database import get_connection
 from supabase_client import get_supabase_client, is_supabase_configured
 
@@ -27,6 +30,27 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+class AuthenticationError(Exception):
+    def __init__(self, status_code: int, message: str):
+        self.status_code = status_code
+        self.message = message
+
+
+@app.exception_handler(AuthenticationError)
+async def authentication_error_handler(_, exc: AuthenticationError):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": exc.message},
+    )
+
+
+@dataclass
+class AuthenticatedRequest:
+    user: User
+    access_token: str
+    supabase_client: Client
 
 
 class AuthCredentials(BaseModel):
@@ -126,48 +150,76 @@ def public_info():
     return {"message": "Welcome stranger! This info is public."}
 
 
-def access_token_error():
-    return JSONResponse(
-        status_code=401,
-        content={"error": "Access token required"},
-    )
-
-
-@app.get("/protected/profile")
-def protected_profile(authorization: str | None = Header(default=None)):
+def require_authenticated_user(
+    authorization: str | None = Header(default=None),
+) -> AuthenticatedRequest:
     if authorization is None:
-        return access_token_error()
+        raise AuthenticationError(401, "Access token required")
 
     auth_parts = authorization.strip().split()
     if len(auth_parts) != 2 or auth_parts[0].lower() != "bearer":
-        return access_token_error()
+        raise AuthenticationError(401, "Access token required")
 
     access_token = auth_parts[1]
     try:
-        result = get_supabase_client().auth.get_user(access_token)
+        supabase_client = get_supabase_client()
+        result = supabase_client.auth.get_user(access_token)
     except AuthApiError as exc:
         if exc.status in (400, 401, 403) or exc.code in ("bad_jwt", "invalid_jwt"):
-            return JSONResponse(
-                status_code=401,
-                content={"error": "Invalid or expired token"},
-            )
+            raise AuthenticationError(401, "Invalid or expired token") from None
         raise HTTPException(
             status_code=502,
             detail="Supabase Auth could not verify the access token",
         ) from None
 
     if result is None or result.user is None:
-        return JSONResponse(
-            status_code=401,
-            content={"error": "Invalid or expired token"},
-        )
+        raise AuthenticationError(401, "Invalid or expired token")
 
-    user = result.user
+    return AuthenticatedRequest(
+        user=result.user,
+        access_token=access_token,
+        supabase_client=supabase_client,
+    )
+
+
+@app.get("/protected/profile")
+def protected_profile(
+    authenticated: AuthenticatedRequest = Depends(require_authenticated_user),
+):
+    user = authenticated.user
     return {
         "id": user.id,
         "email": user.email,
         "created_at": user.created_at,
     }
+
+
+@app.get("/protected/dashboard")
+def protected_dashboard(
+    authenticated: AuthenticatedRequest = Depends(require_authenticated_user),
+):
+    return {
+        "message": "Welcome to your protected dashboard",
+        "user_id": authenticated.user.id,
+    }
+
+
+@app.post("/auth/logout", status_code=204)
+def logout(
+    authenticated: AuthenticatedRequest = Depends(require_authenticated_user),
+):
+    try:
+        # The client is request-scoped and has no stored session, so revoke using
+        # the verified user's JWT directly instead of relying on shared session state.
+        authenticated.supabase_client.auth.admin.sign_out(authenticated.access_token)
+    except AuthApiError as exc:
+        if exc.status in (400, 401, 403) or exc.code in ("bad_jwt", "invalid_jwt"):
+            raise AuthenticationError(401, "Invalid or expired token") from None
+        raise HTTPException(
+            status_code=502,
+            detail="Supabase Auth could not complete logout",
+        ) from None
+    return Response(status_code=204)
 
 tasks = [
     {
